@@ -1,1 +1,20 @@
-html{overflow-x:hidden}button,a{touch-action:manipulation}.skip{position:fixed;top:8px;left:8px;z-index:10;transform:translateY(-150%);background:var(--panel);color:var(--text);padding:10px;border:2px solid var(--accent);border-radius:6px}.skip:focus{transform:translateY(0)}h1,h2{text-wrap:balance;scroll-margin-top:1rem}.thread:hover,.brand:hover,.thread-heading a:hover,.empty a:hover{text-decoration:underline}button:hover:not(:disabled){filter:brightness(1.08)}
+html{overflow-x:hidden}
+button,a{touch-action:manipulation}
+.skip{
+  position:fixed;
+  top:8px;
+  left:8px;
+  z-index:10;
+  transform:translateY(-150%);
+  background:var(--panel);
+  color:var(--text);
+  padding:10px;
+  border:2px solid var(--accent);
+  border-radius:6px;
+}
+.skip:focus{transform:translateY(0)}
+h1,h2{text-wrap:balance;scroll-margin-top:1rem}
+.thread:hover,.brand:hover,.thread-heading a:hover,.empty a:hover{text-decoration:underline}
+button:hover:not(:disabled){filter:brightness(1.08)}
+.dialog-backdrop{overscroll-behavior:contain}
+.byte-count,.counts,.status,.limit{font-variant-numeric:tabular-nums}
