@@ -99,18 +99,8 @@ export async function pollPending(
   const block = await rpc.getBlockNumber().catch(() => tx.lastMissingBlock ?? 0n);
   const distinct = tx.lastMissingBlock === undefined || block > BigInt(tx.lastMissingBlock);
   const checks = distinct ? tx.missingChecks + 1 : tx.missingChecks;
-  let replaced = false;
-  if (tx.nonce !== undefined) {
-    try {
-      // The stored sender, not whichever account the wallet shows now.
-      const count = await rpc.getTransactionCount({ address: tx.from, blockTag: 'latest' });
-      replaced = count > tx.nonce;
-    } catch {
-      /* cannot establish replacement */
-    }
-  }
   const aged = now - tx.created >= DROP_AFTER_MS;
-  const dropped = checks >= 2 && (aged || replaced);
+  const dropped = checks >= 2 && aged;
   return {
     ...tx,
     lastMissingBlock: block,

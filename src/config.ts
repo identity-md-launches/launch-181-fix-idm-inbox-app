@@ -22,6 +22,7 @@ export const MAX_FOLLOWS = 20;
 export const MESSAGE_COLLAPSE_LENGTH = 2_000;
 export const WALLET_DISCOVERY_MS = 500;
 export const MAX_MESSAGE_BYTES = 8_192;
+export const FEE_DEBOUNCE_MS = 500;
 export const FEE_REFRESH_MS = 15_000;
 export const RECEIPT_POLL_MS = 15_000;
 export const DROP_AFTER_MS = 30 * 60 * 1000;

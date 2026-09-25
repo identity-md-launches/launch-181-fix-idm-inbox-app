@@ -29,7 +29,13 @@ function mainnetRpc(log: Entry[], code: () => string) {
       case 'eth_call': {
         const now = BigInt(Math.floor(Date.now() / 1000));
         return encodeAbiParameters(
-          [{ type: 'uint80' }, { type: 'int256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint80' }],
+          [
+            { type: 'uint80' },
+            { type: 'int256' },
+            { type: 'uint256' },
+            { type: 'uint256' },
+            { type: 'uint80' },
+          ],
           [1n, 2000n * 10n ** 8n, now, now, 1n],
         );
       }
@@ -106,7 +112,7 @@ describe('A4 pending watcher', () => {
     await flush();
   }
 
-  it('keeps wallet plus public RPC calls at or below 7 per 15 s after a send, and stops on unmount', async () => {
+  it('caps polling at 7 calls per 15 s and stops on unmount', async () => {
     fakeClock();
     const log: Entry[] = [];
     installFetch({ rpc: mainnetRpc(log, () => '0x') });
@@ -118,7 +124,7 @@ describe('A4 pending watcher', () => {
     );
     await connect();
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'hello there' } });
-    await flush();
+    await flush(500);
     const send = screen.getByRole('button', { name: 'Send' });
     expect(send).toBeEnabled();
     fireEvent.click(send);
@@ -209,7 +215,8 @@ describe('A5 chain safety', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await screen.findByText('Pending');
     const methods = w.calls.map((c) => c.method);
-    expect(methods.indexOf('wallet_switchEthereumChain')).toBeLessThan(methods.indexOf('eth_sendTransaction'));
+    expect(methods.indexOf('wallet_switchEthereumChain'))
+      .toBeLessThan(methods.indexOf('eth_sendTransaction'));
     expect(w.chain()).toBe('0x1');
     const rpcCode = log.filter((e) => e.source === 'rpc' && e.method === 'eth_getCode');
     expect(rpcCode.length).toBeGreaterThanOrEqual(2);

@@ -1,11 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatEther, stringToHex, type Address, type Hash } from 'viem';
-import { FEE_REFRESH_MS, MAX_MESSAGE_BYTES } from './config';
+import { FEE_DEBOUNCE_MS, FEE_REFRESH_MS, MAX_MESSAGE_BYTES } from './config';
 import { latestPending, usePendingTx } from './pending';
 import { codeWarning, mainnetClient, type CodeWarning } from './rpc';
 import { requireMainnet, useWallet, walletError } from './wallet';
-import { fetchEthPrice } from './Tips';
+import { fetchEthPrice } from './price';
 
 type Rpc = { request(args: { method: string; params?: unknown }): Promise<unknown> };
 type FeeTx = { from: Address; to: Address; data: `0x${string}`; value: `0x${string}` };
@@ -44,6 +44,7 @@ export function Composer({
   const canReply = counterparty && wallet.account?.toLowerCase() === owner.toLowerCase();
   const recipient = (canReply ? counterparty : owner) as Address;
   const [text, setText] = useState('');
+  const estimateVersion = useRef(0);
   const [fee, setFee] = useState<bigint>();
   const [feeUsd, setFeeUsd] = useState<number>();
   const [feeError, setFeeError] = useState(false);
@@ -63,7 +64,13 @@ export function Composer({
   const shown =
     pending?.kind === 'message' && pending.from.toLowerCase() === sender ? pending : undefined;
 
+  useEffect(() => {
+    setArmed(false);
+    setUnderstood(false);
+  }, [wallet.chainVersion, wallet.account, recipient]);
+
   const estimate = useCallback(async () => {
+    const version = ++estimateVersion.current;
     if (!wallet.provider || !wallet.account || !text || count > MAX_MESSAGE_BYTES) {
       setFee(undefined);
       return;
@@ -76,11 +83,13 @@ export function Composer({
         mainnetClient.getCode({ address: recipient }),
         fetchEthPrice().catch(() => undefined),
       ]);
+      if (version !== estimateVersion.current) return;
       setFee(next);
       setFeeUsd(price ? Number(formatEther(next)) * price.usd : undefined);
       setFeeError(false);
       setWarning(codeWarning(code));
     } catch {
+      if (version !== estimateVersion.current) return;
       setFee(undefined);
       setFeeUsd(undefined);
       setFeeError(true);
@@ -88,10 +97,17 @@ export function Composer({
   }, [wallet.provider, wallet.account, text, count, recipient]);
 
   useEffect(() => {
-    void estimate();
+    const sequence = estimateVersion;
+    setFee(undefined);
+    setFeeError(false);
+    const debounce = setTimeout(() => void estimate(), FEE_DEBOUNCE_MS);
     const id = setInterval(() => void estimate(), FEE_REFRESH_MS);
-    return () => clearInterval(id);
-  }, [estimate]);
+    return () => {
+      ++sequence.current;
+      clearTimeout(debounce);
+      clearInterval(id);
+    };
+  }, [estimate, wallet.chainVersion]);
 
   const send = async () => {
     if (!wallet.provider || !wallet.account) return;
@@ -178,6 +194,8 @@ export function Composer({
       <label htmlFor="message">Message</label>
       <textarea
         id="message"
+        name="message"
+        autoComplete="off"
         value={text}
         onChange={(e) => {
           setText(e.target.value);
@@ -207,7 +225,8 @@ export function Composer({
           <span>
             {warning === 'smart'
               ? 'This wallet runs smart-account code; your text may run it or fail.'
-              : 'This address is a contract. Your text would be sent as a function call and may do something.'}{' '}
+              : 'This address is a contract. Your text would be sent as a function call ' +
+                'and may do something.'}{' '}
             I understand
           </span>
         </label>

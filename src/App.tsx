@@ -8,6 +8,7 @@ import { isLocalStateAvailable, safeStorage } from './storage';
 import { acceptRequest, buildThreads, openThread, type Message, type Thread } from './threads';
 import { Composer } from './Composer';
 import { Tips } from './Tips';
+import { URL_RE } from './decode';
 import { useWallet } from './wallet';
 import './styles.css';
 import './review.css';
@@ -408,12 +409,25 @@ export function ThreadList({
   return (
     <>
       <div className="tabs" role="tablist" aria-label="Mailbox">
-        <button role="tab" aria-selected={tab === 'inbox'} onClick={() => setTab('inbox')}>
-          Inbox
-        </button>
-        <button role="tab" aria-selected={tab === 'requests'} onClick={() => setTab('requests')}>
-          Requests
-        </button>
+        {(['inbox', 'requests'] as const).map((name) => (
+          <button
+            key={name}
+            role="tab"
+            aria-selected={tab === name}
+            tabIndex={tab === name ? 0 : -1}
+            onClick={() => setTab(name)}
+            onKeyDown={(event) => {
+              if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+              event.preventDefault();
+              const next = name === 'inbox' ? 'requests' : 'inbox';
+              setTab(next);
+              const tabs = event.currentTarget.parentElement?.querySelectorAll('button');
+              tabs?.[next === 'inbox' ? 0 : 1]?.focus();
+            }}
+          >
+            {name === 'inbox' ? 'Inbox' : 'Requests'}
+          </button>
+        ))}
       </div>
       {body}
     </>
@@ -453,7 +467,7 @@ function displayName(label: string, address: string) {
 export function MessageBody({ message }: { message: Message }) {
   const [all, setAll] = useState(false);
   const long = message.text.length > MESSAGE_COLLAPSE_LENGTH;
-  const url = /https?:\/\/\S+/i.test(message.text);
+  const urls = message.text.match(URL_RE) ?? [];
   const text = long && !all ? message.text.slice(0, MESSAGE_COLLAPSE_LENGTH) + '…' : message.text;
   return (
     <>
@@ -463,14 +477,17 @@ export function MessageBody({ message }: { message: Message }) {
           {all ? 'Show less' : 'Show all'}
         </button>
       )}
-      {url && (
+      {urls.length > 0 && (
         <div className="link-warning">
-          <button
-            className="secondary copy"
-            onClick={() => void navigator.clipboard?.writeText(message.text)}
-          >
-            Copy
-          </button>
+          {urls.map((url, index) => (
+            <button
+              key={`${index}:${url}`}
+              className="secondary copy"
+              onClick={() => void navigator.clipboard?.writeText(url)}
+            >
+              Copy
+            </button>
+          ))}
           <span>Links in messages may be scams.</span>
         </div>
       )}

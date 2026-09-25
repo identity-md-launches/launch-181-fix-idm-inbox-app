@@ -245,3 +245,79 @@ describe('A7 threads', () => {
     expect(screen.queryByRole('button', { name: 'Load older' })).toBeNull();
   });
 });
+
+describe('B6 keyboard order and ENS; B8 URL copying', () => {
+  it('orders search before the first row before Load older, with no positive tabindex', async () => {
+    const row = item(DEV_BOARD, DEV_BOARD, 'hello board');
+    installFetch({
+      http: (url) => {
+        const cursor = Number(new URL(url).searchParams.get('block_number') ?? 100);
+        return json({ items: [row], next_page_params: { block_number: cursor - 10 } });
+      },
+    });
+    location.hash = '#/';
+    const { container } = render(<App />);
+    await screen.findByText('1 thread loaded');
+    const focusables = [...container.querySelectorAll<HTMLElement>(
+      'a[href], button, input, [tabindex]',
+    )];
+    const search = screen.getByLabelText('Open an address or ENS name');
+    const first = container.querySelector<HTMLElement>('.thread')!;
+    const older = screen.getByRole('button', { name: 'Load older' });
+    expect(focusables.indexOf(search)).toBeLessThan(focusables.indexOf(first));
+    expect(focusables.indexOf(first)).toBeLessThan(focusables.indexOf(older));
+    focusables.forEach((element) => expect(element.tabIndex).toBeLessThanOrEqual(0));
+  });
+
+  it('moves selection and focus in both directions between Inbox and Requests', async () => {
+    installFetch({ http: boardResponse });
+    location.hash = '#/';
+    render(<App />);
+    await screen.findByText(/threads loaded/);
+    const inbox = screen.getByRole('tab', { name: 'Inbox' });
+    const requests = screen.getByRole('tab', { name: 'Requests' });
+    inbox.focus();
+    fireEvent.keyDown(inbox, { key: 'ArrowRight' });
+    expect(requests).toHaveFocus();
+    expect(requests).toHaveAttribute('aria-selected', 'true');
+    expect(inbox).toHaveAttribute('tabindex', '-1');
+    fireEvent.keyDown(requests, { key: 'ArrowLeft' });
+    expect(inbox).toHaveFocus();
+    expect(inbox).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('shows the required error for an ENS OffchainLookup revert', async () => {
+    const { mainnetClient } = await import('./rpc');
+    const resolve = vi.spyOn(mainnetClient, 'getEnsAddress')
+      .mockRejectedValue(new Error('execution reverted: OffchainLookup'));
+    installFetch({ http: boardResponse });
+    location.hash = '#/';
+    render(<App />);
+    fireEvent.change(screen.getByLabelText('Open an address or ENS name'), {
+      target: { value: 'offchain.eth' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Open inbox' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("Can't resolve this name");
+    expect(resolve).toHaveBeenCalledWith({ name: 'offchain.eth' });
+  });
+
+  it.each(['http://example.test/a', 'https://example.test/b', 'www.example.test/c'])(
+    'warns for %s and copies each URL alone',
+    async (url) => {
+      const copy = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: copy } });
+      const second = 'https://second.test/d';
+      const row = item(other, owner, `hello see ${url} and ${second} please`);
+      installFetch({ http: () => json({ items: [row], next_page_params: null }) });
+      location.hash = `#/a/${owner}/${other}`;
+      render(<App />);
+      expect(await screen.findByText('Links in messages may be scams.')).toBeInTheDocument();
+      const buttons = screen.getAllByRole('button', { name: 'Copy' });
+      expect(buttons).toHaveLength(2);
+      fireEvent.click(buttons[0]);
+      expect(copy).toHaveBeenLastCalledWith(url);
+      fireEvent.click(buttons[1]);
+      expect(copy).toHaveBeenLastCalledWith(second);
+    },
+  );
+});
